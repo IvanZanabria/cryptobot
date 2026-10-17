@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crypto Trading Bot · Oportunidades de Compra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg: #0b132b;
+      --panel: #1c2541;
+      --panel-2: #3a506b;
+      --line: #2a385b;
+      --text: #edf2f4;
+      --muted: #8d99ae;
+      --buy: #06d6a0;
+      --warn: #ffd166;
+      --threat: #ef476f;
+      --sans: 'IBM Plex Sans', sans-serif;
+      --mono: 'IBM Plex Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+    .status {
+      display: flex; align-items: center; justify-content: space-between; padding: 22px 26px;
+      border-radius: 12px; background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--buy); margin-bottom: 20px;
+    }
+    .status h1 { font-size: 1.8rem; }
+    .status p { color: var(--muted); }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+    .kpi span { color: var(--muted); font-size: .88rem; }
+    .kpi strong { display: block; font-size: 1.8rem; font-weight: 600; margin-top: 2px; }
+    .kpi.buy strong { color: var(--buy); }
+
+    .row { display: grid; gap: 16px; margin-bottom: 20px; grid-template-columns: 1.4fr 1fr; }
+    @media (max-width: 1000px) { .row { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+    .panel h2 { font-size: 1rem; margin-bottom: 4px; }
+    .panel .hint { color: var(--muted); font-size: .85rem; margin-bottom: 12px; }
+
+    .chart-box { position: relative; height: 150px; margin-bottom: 10px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    th { text-align: left; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--panel-2); font-variant-numeric: tabular-nums; }
+    td.mono { font-family: var(--mono); }
+
+    .badge { padding: 2px 8px; border-radius: 999px; background: rgba(6, 214, 160, .2); color: var(--buy); font-size: .8rem; font-weight: 600; }
+    .log-box { background: #070d1f; border: 1px solid var(--line); border-radius: 8px; height: 300px; overflow-y: auto; padding: 8px 12px; font-family: var(--mono); font-size: .82rem; }
+    .alertas-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+    .alerta { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 8px; font-size: .92rem; border-left: 4px solid; }
+    .alerta.info { background: rgba(17, 138, 178, .14); border-color: #118ab2; }
+    .alerta.advertencia { background: rgba(255, 209, 102, .13); border-color: var(--warn); }
+    .alerta.critica { background: rgba(239, 71, 111, .16); border-color: #ef476f; }
+    .alerta.resuelta { opacity: .45; border-color: var(--muted); background: rgba(255,255,255,.04); }
+    .alerta.nueva { animation: parpadeo 1s ease-in-out 3; }
+    .alerta small { color: var(--muted); font-family: var(--mono); white-space: nowrap; text-align: right; }
+    .tag { display: inline-block; min-width: 92px; text-align: center; margin-right: 8px; padding: 1px 8px; border-radius: 4px; font-size: .72rem; letter-spacing: .04em; background: rgba(255,255,255,.12); }
+    .filtros { display: flex; gap: 8px; margin: 8px 0 12px; flex-wrap: wrap; }
+    .filtros button { background: transparent; color: var(--muted); border: 1px solid var(--muted); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: .8rem; }
+    .filtros button.on { color: #111; background: var(--warn); border-color: var(--warn); }
+    .kpi.alert strong { color: var(--warn); }
+    @keyframes parpadeo { 50% { background: rgba(255, 209, 102, .45); } }
+    .log-line { padding: 3px 0; border-bottom: 1px solid #131c38; }
+  </style>
+</head>
+
+<body>
+
+  <header class="status">
+    <div>
+      <h1>Crypto Bot · Estrategia de Compra Óptima</h1>
+      <p id="status-text">Monitoreando caídas de precio con múltiples productores en tiempo real...</p>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi buy"><span>Compras Ejecutadas</span><strong id="kpi-compras">0</strong></div>
+    <div class="kpi alert"><span>Productores Activos</span><strong id="kpi-prod">0</strong></div>
+    <div class="kpi alert"><span>Alertas Activas</span><strong id="kpi-alertas">0</strong></div>
+    <div class="kpi"><span>Último Precio BTC</span><strong id="kpi-btc">—</strong></div>
+    <div class="kpi"><span>Último Precio ETH</span><strong id="kpi-eth">—</strong></div>
+    <div class="kpi"><span>Último Precio SOL</span><strong id="kpi-sol">—</strong></div>
+  </section>
+
+  <section class="row">
+    <div class="panel">
+      <h2>Historial de Precios en Vivo</h2>
+      <p class="hint">Un gráfico por moneda (cada una con su propia escala): línea continua = P1, punteada = P2</p>
+      <div class="chart-box"><canvas id="chart-BTC"></canvas></div>
+      <div class="chart-box"><canvas id="chart-ETH"></canvas></div>
+      <div class="chart-box"><canvas id="chart-SOL"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Órdenes de Compra Automáticas</h2>
+      <p class="hint">Gatilladas al detectar caída de 0.1% o más respecto al promedio reciente (máx. 1 compra cada 30 s por moneda y productor)</p>
+      <div style="overflow-y: auto; max-height: 260px;">
+        <table>
+          <thead>
+            <tr><th>Cripto</th><th>Prod.</th><th>Precio Compra</th><th>Promedio</th><th>Descuento</th><th>Estado</th></tr>
+          </thead>
+          <tbody id="tabla-ordenes"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-bottom: 20px;">
+    <h2>Alertas</h2>
+    <p class="hint">Caídas y subidas de precio, divergencia entre productores y estado de cada productor</p>
+    <div class="filtros" id="filtros">
+      <button data-f="todas" class="on">Todas</button>
+      <button data-f="critica">Críticas</button>
+      <button data-f="advertencia">Advertencias</button>
+      <button data-f="info">Info</button>
+      <button data-f="activa">Solo activas</button>
+    </div>
+    <div class="alertas-list" id="alertas-list"><div class="hint">Sin alertas todavía...</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Feed del Mercado (Tick Stream)</h2>
+    <p class="hint">Últimos eventos procesados desde el log</p>
+    <div class="log-box" id="log-box"></div>
+  </section>
+
+  <script>
+    const API = window.location.origin.startsWith("http") ? "" : "http://127.0.0.1:5000"; // mismo origen: funciona con IP pública
+    const $ = id => document.getElementById(id);
+
+    const COLORES = { "BTC/USDT": "#ffd166", "ETH/USDT": "#118ab2", "SOL/USDT": "#06d6a0" };
+    const MONEDAS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"];
+    const charts = {};
+    MONEDAS.forEach(m => {
+      charts[m] = new Chart($("chart-" + m.split("/")[0]), {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          maintainAspectRatio: false, animation: false,
+          plugins: { title: { display: true, text: m }, legend: { position: "right" } },
+          scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { grace: "5%" } }
+        }
+      });
+    });
+    let alertasData = [], idsVistos = null, filtro = "todas";
+    const ETIQUETAS = { CAIDA_PRECIO: "CAÍDA", SUBIDA_PRECIO: "SUBIDA", DIVERGENCIA: "DIVERGENCIA",
+                        NUEVO_PRODUCTOR: "NUEVO", PRODUCTOR_INACTIVO: "INACTIVO", PRODUCTOR_RECUPERADO: "RECUPERADO" };
+
+    document.querySelectorAll("#filtros button").forEach(b => b.onclick = () => {
+      filtro = b.dataset.f;
+      document.querySelectorAll("#filtros button").forEach(x => x.classList.toggle("on", x === b));
+      renderAlertas();
+    });
+
+    function renderAlertas() {
+      let lista = alertasData.slice().reverse();
+      if (filtro === "activa") lista = lista.filter(a => a.estado === "activa");
+      else if (filtro !== "todas") lista = lista.filter(a => a.severidad === filtro);
+      lista.sort((x, y) => (x.estado === "activa" ? 0 : 1) - (y.estado === "activa" ? 0 : 1));
+      $("alertas-list").innerHTML = lista.length
+        ? lista.slice(0, 40).map(a => `
+          <div class="alerta ${a.severidad} ${a.estado === "resuelta" ? "resuelta" : ""} ${a.nueva ? "nueva" : ""}">
+            <span><b class="tag">${ETIQUETAS[a.tipo] || "ALERTA"}</b> ${a.mensaje}</span>
+            <small>${a.inicio}${a.estado === "resuelta" ? "<br>resuelta " + a.resuelta_en.slice(11) : ""}</small>
+          </div>`).join("")
+        : `<div class="hint">Sin alertas con este filtro...</div>`;
+    }
+
+    async function actualizar() 
+       {
+      try {
+        const [ordenes, logs, alertas, productores] = await Promise.all([
+          fetch(`${API}/api/ordenes`).then(r => r.json()),
+          fetch(`${API}/api/logs`).then(r => r.json()),
+          fetch(`${API}/api/alertas`).then(r => r.json()),
+          fetch(`${API}/api/productores`).then(r => r.json())
+        ]);
+
+        // Alertas y estado de productores
+        const activos = productores.filter(p => p.estado === "activo").length;
+        $("kpi-prod").textContent = `${activos}/${productores.length}`;
+        $("kpi-alertas").textContent = alertas.filter(a => a.estado === "activa").length;
+        const primera = idsVistos === null;
+        if (primera) idsVistos = new Set();
+        let ultimaNueva = null;
+        alertas.forEach(a => {
+          a.nueva = !primera && !idsVistos.has(a.id_alerta);
+          if (a.nueva) ultimaNueva = a;
+          idsVistos.add(a.id_alerta);
+        });
+        alertasData = alertas;
+        renderAlertas();
+        if (ultimaNueva) $("status-text").textContent = ultimaNueva.mensaje;
+
+        $("kpi-compras").textContent = ordenes.length;
+
+        // Render Tabla Órdenes
+        $("tabla-ordenes").innerHTML = ordenes.length
+          ? ordenes.slice().reverse().map(o => `
+            <tr>
+              <td class="mono">${o.cripto}</td>
+              <td class="mono">${o.productor || "P1"}</td>
+              <td class="mono">$${o.precio_ejecucion}</td>
+              <td class="mono">$${o.precio_promedio}</td>
+              <td style="color:var(--buy)">${o.descuento}</td>
+              <td><span class="badge">${o.estado}</span></td>
+            </tr>`).join("")
+          : `<tr><td colspan="6">Esperando oportunidades de compra...</td></tr>`;
+
+        // Render Logs y extracción de datos para el gráfico
+        const logBox = $("log-box");
+        logBox.innerHTML = logs.slice().reverse().map(l => `<div class="log-line">${l}</div>`).join("");
+
+        // Series por cripto y productor, ordenadas por tiempo
+        const labels = [];
+        const series = {};   // "BTC/USDT · P1" -> [precios]
+        logs.forEach(l => {
+          const p = l.split("|");
+          if (p.length < 3) return;
+          const ts = p[0].slice(11, 19);
+          const cripto = p[1].trim();
+          const precio = parseFloat(p[2]);
+          const prod = p.length >= 5 ? p[4].trim() : "P1";
+          const clave = `${cripto} · ${prod}`;
+          (series[clave] = series[clave] || []).push({ ts, precio });
+          if (!labels.includes(ts)) labels.push(ts);
+          const kpi = { "BTC/USDT": "kpi-btc", "ETH/USDT": "kpi-eth", "SOL/USDT": "kpi-sol" }[cripto];
+          if (kpi) $(kpi).textContent = `$${precio}`;
+        });
+
+        const ultimos = labels.slice(-20);
+        MONEDAS.forEach(m => {
+          const ch = charts[m];
+          ch.data.labels = ultimos;
+          ch.data.datasets = Object.entries(series).filter(([clave]) => clave.startsWith(m)).map(([clave, pts]) => {
+            const prod = clave.split(" · ")[1];
+            const mapa = Object.fromEntries(pts.map(x => [x.ts, x.precio]));
+            let ultimo = null;
+            const data = ultimos.map(t => (t in mapa) ? (ultimo = mapa[t]) : ultimo);
+            return { label: prod, data, borderColor: COLORES[m] || "#aaa", borderDash: prod === "P1" ? [] : [6, 4],
+                     tension: .2, pointRadius: 0, spanGaps: true };
+          });
+          ch.update();
+        });
+
+      } catch (e) {
+        console.error("Error conectando a la API", e);
+      }
+    }
+
+    actualizar();
+    setInterval(actualizar, 2000);
+  </script>
+</body>
+</html>

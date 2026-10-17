@@ -1,0 +1,8 @@
+flask
+flask-cors
+sqlalchemy
+pymysql
+pandas
+cryptography
+# Opcional (solo para analisis_spark.py / procesador_spark.py; requiere Java):
+# pyspark
